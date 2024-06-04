@@ -2360,5 +2360,20 @@ namespace System.Management.Automation
         public virtual bool TransformNullOptionalParameters { get => true; }
     }
 
+    /// <summary>
+    /// Sets the variable to be constant.
+    public sealed class ConstantTransformAttribute : ArgumentTransformationAttribute
+    {
+        public ConstantTransformAttribute(object constantValue)
+        {
+            throw new NotImplementedException();
+        }
+
+        public override object Transform(EngineIntrinsics engineIntrinsics, object inputData)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     #endregion Data Generation Attributes
 }
