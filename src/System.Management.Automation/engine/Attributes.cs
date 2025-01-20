@@ -2362,13 +2362,20 @@ namespace System.Management.Automation
 
     /// <summary>
     /// Sets the variable to be constant.
+    /// </summary>
     public sealed class ConstantTransformAttribute : ArgumentTransformationAttribute
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConstantTransformAttribute"/> class.
+        /// </summary>
         public ConstantTransformAttribute(object constantValue)
         {
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Transforms the input data into the constant value.
+        /// </summary>
         public override object Transform(EngineIntrinsics engineIntrinsics, object inputData)
         {
             throw new NotImplementedException();
