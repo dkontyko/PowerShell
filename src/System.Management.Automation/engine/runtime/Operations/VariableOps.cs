@@ -41,10 +41,11 @@ namespace System.Management.Automation
 
             if (var == null)
             {
+                ScopedItemOptions options = ScopedItemOptions.None;
                 var attributes = attributeAsts == null
                                      ? new Collection<Attribute>()
-                                     : GetAttributeCollection(attributeAsts);
-                var = new PSVariable(variablePath.UnqualifiedPath, value, ScopedItemOptions.None, attributes);
+                                     : GetAttributeCollection(attributeAsts, out options);
+                var = new PSVariable(variablePath.UnqualifiedPath, value, options, attributes);
 
                 if (attributes.Count > 0)
                 {
@@ -79,7 +80,12 @@ namespace System.Management.Automation
                         throw e;
                     }
 
-                    var attributes = GetAttributeCollection(attributeAsts);
+                    var attributes = GetAttributeCollection(attributeAsts, out ScopedItemOptions options);
+                    if ((options & ScopedItemOptions.Constant) != ScopedItemOptions.None)
+                    {
+                        var.SetOptions(var.Options | ScopedItemOptions.Constant, false);
+                    }
+
                     value = PSVariable.TransformValue(attributes, value);
                     if (!PSVariable.IsValidValue(attributes, value))
                     {
@@ -97,6 +103,11 @@ namespace System.Management.Automation
                     // Don't update the PSVariable's attributes until we successfully set the value
                     var.Attributes.Clear();
                     var.AddParameterAttributesNoChecks(attributes);
+
+                    if ((options & ScopedItemOptions.ReadOnly) != ScopedItemOptions.None)
+                    {
+                        var.SetOptions(var.Options | ScopedItemOptions.ReadOnly, false);
+                    }
 
                     if (executionContext._debuggingMode > 0)
                     {
@@ -249,12 +260,21 @@ namespace System.Management.Automation
             return PSReference.CreateInstance(var, staticType);
         }
 
-        private static Collection<Attribute> GetAttributeCollection(AttributeBaseAst[] attributeAsts)
+        private static Collection<Attribute> GetAttributeCollection(AttributeBaseAst[] attributeAsts, out ScopedItemOptions options)
         {
+            options = ScopedItemOptions.None;
             var result = new Collection<Attribute>();
             foreach (var attributeAst in attributeAsts)
             {
-                result.Add(attributeAst.GetAttribute());
+                Attribute attribute = attributeAst.GetAttribute();
+                if (attribute is IVariableOptionAttribute variableOptionAttribute)
+                {
+                    options |= variableOptionAttribute.Option;
+                }
+                else
+                {
+                    result.Add(attribute);
+                }
             }
 
             return result;

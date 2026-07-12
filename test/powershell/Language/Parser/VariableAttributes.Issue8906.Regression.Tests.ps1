@@ -141,52 +141,44 @@ $variable = Get-Variable -Name value
     }
 
     It "ValidateRange attribute on variable assignment continues to enforce validation" {
-        $name = "issue8906_reg_validateRange_1"
-
-        try {
-            & ([ScriptBlock]::Create("[ValidateRange(1,5)]`$script:$name = 3"))
-
-            (Get-Variable -Name $name -ValueOnly) | Should -Be 3
-
+        $result = & {
+            [ValidateRange(1,5)]$value = 3
             $errorId = $null
             try {
-                Set-Variable -Name $name -Scope Script -Value 9 -ErrorAction Stop
+                Set-Variable -Name value -Value 9 -ErrorAction Stop
             }
             catch {
                 $errorId = $_.FullyQualifiedErrorId
             }
 
-            $errorId | Should -Match "^ValidateSetFailure"
+            [pscustomobject]@{
+                ErrorId = $errorId
+                Value = $value
+            }
+        }
 
-            (Get-Variable -Name $name -ValueOnly) | Should -Be 3
-        }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+        $result.ErrorId | Should -Match "^ValidateSetFailure"
+        $result.Value | Should -Be 3
     }
 
     It "ValidateNotNull attribute on variable assignment continues to enforce validation" {
-        $name = "issue8906_reg_validateNotNull_1"
-
-        try {
-            & ([ScriptBlock]::Create("[ValidateNotNull()]`$script:$name = 'ok'"))
-
-            (Get-Variable -Name $name -ValueOnly) | Should -Be "ok"
-
+        $result = & {
+            [ValidateNotNull()]$value = 'ok'
             $errorId = $null
             try {
-                Set-Variable -Name $name -Scope Script -Value $null -ErrorAction Stop
+                Set-Variable -Name value -Value $null -ErrorAction Stop
             }
             catch {
                 $errorId = $_.FullyQualifiedErrorId
             }
 
-            $errorId | Should -Match "^ValidateSetFailure"
+            [pscustomobject]@{
+                ErrorId = $errorId
+                Value = $value
+            }
+        }
 
-            (Get-Variable -Name $name -ValueOnly) | Should -Be "ok"
-        }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+        $result.ErrorId | Should -Match "^ValidateSetFailure"
+        $result.Value | Should -Be "ok"
     }
 }

@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT License.
 
-Describe "Issue #8906 - attribute syntax for variable options (expected to fail until implemented)" -Tags "CI" {
+Describe "Issue #8906 - attribute syntax for variable options" -Tags "CI" {
     It "[PSConstant] creates a constant variable" {
         $name = "issue8906_const_1"
 
@@ -18,55 +18,95 @@ catch {
 [pscustomobject]@{
     Value = (Get-Variable -Name $name -ValueOnly)
     Options = (Get-Variable -Name $name).Options
+    AttributeCount = (Get-Variable -Name $name).Attributes.Count
     WriteErrorId = `$writeErrorId
 }
 "@))
 
         $result.Value | Should -Be 42
         $result.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::Constant)
+        $result.AttributeCount | Should -Be 0
         $result.WriteErrorId | Should -Match "^VariableNotWritable"
     }
 
     It "[ReadOnly] creates a read-only variable" {
-        $name = "issue8906_readonly_1"
+        $result = & {
+            [ReadOnly()]$value = 7
+            $writeErrorId = try {
+                $value = 8
+                $null
+            }
+            catch {
+                $_.FullyQualifiedErrorId
+            }
 
-        try {
-            & ([ScriptBlock]::Create("[ReadOnly()]`$script:$name = 7"))
+            $variable = Get-Variable -Name value
+            [pscustomobject]@{
+                Value = $variable.Value
+                Options = $variable.Options
+                AttributeCount = $variable.Attributes.Count
+                WriteErrorId = $writeErrorId
+            }
+        }
 
-            (Get-Variable -Name $name).Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
-            { & ([ScriptBlock]::Create("`$script:$name = 8")) } | Should -Throw -ErrorId "VariableNotWritable"
+        $result.Value | Should -Be 7
+        $result.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
+        $result.AttributeCount | Should -Be 0
+        $result.WriteErrorId | Should -Match "^VariableNotWritable"
+    }
+
+    It "[PSReadOnly] is the explicit form of [ReadOnly]" {
+        $result = & {
+            [PSReadOnly()]$value = 8
+            $variable = Get-Variable -Name value
+
+            [pscustomobject]@{
+                Value = $variable.Value
+                Options = $variable.Options
+                AttributeCount = $variable.Attributes.Count
+            }
         }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+
+        $result.Value | Should -Be 8
+        $result.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
+        $result.AttributeCount | Should -Be 0
     }
 
     It "[ReadOnly] behavior matches Set-Variable semantics for force update" {
-        $name = "issue8906_readonly_2"
-
-        try {
-            & ([ScriptBlock]::Create("[ReadOnly()]`$script:$name = 1"))
-
+        $result = & {
+            [ReadOnly()]$value = 1
             $writeError = $null
-            Set-Variable -Name $name -Value 2 -ErrorAction SilentlyContinue -ErrorVariable writeError
-            $writeError.FullyQualifiedErrorId | Should -Match "^VariableNotWritable"
-            (Get-Variable -Name $name -ValueOnly) | Should -Be 1
+            Set-Variable -Name value -Value 2 -ErrorAction SilentlyContinue -ErrorVariable writeError
+            $valueAfterWrite = $value
 
-            Set-Variable -Name $name -Value 3 -Force
-            (Get-Variable -Name $name -ValueOnly) | Should -Be 3
-            (Get-Variable -Name $name).Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
+            Set-Variable -Name value -Value 3 -Force
+            $valueAfterForce = $value
+            $optionsAfterForce = (Get-Variable -Name value).Options
 
             $removeError = $null
-            Remove-Variable -Name $name -ErrorAction SilentlyContinue -ErrorVariable removeError
-            $removeError.FullyQualifiedErrorId | Should -Match "^VariableNotRemovable"
-            [bool](Get-Variable -Name $name -ErrorAction SilentlyContinue) | Should -BeTrue
+            Remove-Variable -Name value -ErrorAction SilentlyContinue -ErrorVariable removeError
+            $existsAfterRemove = $null -ne (Get-Variable -Name value -ErrorAction SilentlyContinue)
 
-            Remove-Variable -Name $name -Force
-            [bool](Get-Variable -Name $name -ErrorAction SilentlyContinue) | Should -BeFalse
+            Remove-Variable -Name value -Force
+
+            [pscustomobject]@{
+                WriteErrorId = $writeError.FullyQualifiedErrorId
+                ValueAfterWrite = $valueAfterWrite
+                ValueAfterForce = $valueAfterForce
+                OptionsAfterForce = $optionsAfterForce
+                RemoveErrorId = $removeError.FullyQualifiedErrorId
+                ExistsAfterRemove = $existsAfterRemove
+                ExistsAfterForceRemove = $null -ne (Get-Variable -Name value -ErrorAction SilentlyContinue)
+            }
         }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+
+        $result.WriteErrorId | Should -Match "^VariableNotWritable"
+        $result.ValueAfterWrite | Should -Be 1
+        $result.ValueAfterForce | Should -Be 3
+        $result.OptionsAfterForce | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
+        $result.RemoveErrorId | Should -Match "^VariableNotRemovable"
+        $result.ExistsAfterRemove | Should -BeTrue
+        $result.ExistsAfterForceRemove | Should -BeFalse
     }
 
     It "[PSConstant] behavior matches Set-Variable semantics and never allows mutation" {
@@ -106,23 +146,27 @@ Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue -ErrorVariable 
     }
 
     It "[ReadOnly] behavior matches Clear-Variable force semantics" {
-        $name = "issue8906_readonly_clear"
-
-        try {
-            & ([ScriptBlock]::Create("[ReadOnly()]`$script:$name = 21"))
-
+        $result = & {
+            [ReadOnly()]$value = 21
             $clearError = $null
-            Clear-Variable -Name $name -ErrorAction SilentlyContinue -ErrorVariable clearError
-            $clearError.FullyQualifiedErrorId | Should -Match "^VariableNotWritable"
-            (Get-Variable -Name $name -ValueOnly) | Should -Be 21
+            Clear-Variable -Name value -ErrorAction SilentlyContinue -ErrorVariable clearError
+            $valueBeforeForce = $value
 
-            Clear-Variable -Name $name -Force
-            (Get-Variable -Name $name -ValueOnly) | Should -BeNullOrEmpty
-            (Get-Variable -Name $name).Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
+            Clear-Variable -Name value -Force
+            $variable = Get-Variable -Name value
+
+            [pscustomobject]@{
+                ClearErrorId = $clearError.FullyQualifiedErrorId
+                ValueBeforeForce = $valueBeforeForce
+                ValueAfterForce = $variable.Value
+                OptionsAfterForce = $variable.Options
+            }
         }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+
+        $result.ClearErrorId | Should -Match "^VariableNotWritable"
+        $result.ValueBeforeForce | Should -Be 21
+        $result.ValueAfterForce | Should -BeNullOrEmpty
+        $result.OptionsAfterForce | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
     }
 
     It "[PSConstant] behavior matches Clear-Variable semantics even with force" {
@@ -152,43 +196,43 @@ Clear-Variable -Name $name -Force -ErrorAction SilentlyContinue -ErrorVariable c
     }
 
     It "[ReadOnly] can be applied to an existing writable variable" {
-        $name = "issue8906_existing_readonly"
+        $result = & {
+            Set-Variable -Name value -Value 1
+            [ReadOnly()]$value = 2
+            $variable = Get-Variable -Name value
 
-        try {
-            Set-Variable -Name $name -Value 1
-            & ([ScriptBlock]::Create("[ReadOnly()]`$script:$name = 2"))
+            [pscustomobject]@{
+                Value = $variable.Value
+                Options = $variable.Options
+            }
+        }
 
-            $variable = Get-Variable -Name $name
-            $variable.Value | Should -Be 2
-            $variable.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
-        }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+        $result.Value | Should -Be 2
+        $result.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
     }
 
     It "[PSConstant] cannot be applied to an existing variable" {
-        $name = "issue8906_existing_constant"
-
-        try {
-            Set-Variable -Name $name -Value 1
-
+        $result = & {
+            Set-Variable -Name value -Value 1
             $errorId = try {
-                & ([ScriptBlock]::Create("[PSConstant()]`$script:$name = 2"))
+                [PSConstant()]$value = 2
                 $null
             }
             catch {
                 $_.FullyQualifiedErrorId
             }
 
-            $errorId | Should -Match "^VariableCannotBeMadeConstant"
-            $variable = Get-Variable -Name $name
-            $variable.Value | Should -Be 1
-            $variable.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::None)
+            $variable = Get-Variable -Name value
+            [pscustomobject]@{
+                ErrorId = $errorId
+                Value = $variable.Value
+                Options = $variable.Options
+            }
         }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+
+        $result.ErrorId | Should -Match "^VariableCannotBeMadeConstant"
+        $result.Value | Should -Be 1
+        $result.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::None)
     }
 
     It "option attributes honor local variable scope" {
@@ -231,35 +275,36 @@ Clear-Variable -Name $name -Force -ErrorAction SilentlyContinue -ErrorVariable c
     }
 
     It "option attributes compose with type and validation attributes" {
-        $name = "issue8906_validation_composition"
+        $result = & {
+            [ReadOnly()][ValidateRange(1,5)][int]$value = '3'
+            $variable = Get-Variable -Name value
 
-        try {
-            & ([ScriptBlock]::Create("[ReadOnly()][ValidateRange(1,5)][int]`$script:$name = '3'"))
+            [pscustomobject]@{
+                Value = $variable.Value
+                Options = $variable.Options
+                ValidateRangeCount = $variable.Attributes.Where({ $_ -is [ValidateRange] }).Count
+            }
+        }
 
-            $variable = Get-Variable -Name $name
-            $variable.Value | Should -BeOfType ([int])
-            $variable.Value | Should -Be 3
-            $variable.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
-            $variable.Attributes.Where({ $_ -is [ValidateRange] }).Count | Should -Be 1
-        }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+        $result.Value | Should -BeOfType ([int])
+        $result.Value | Should -Be 3
+        $result.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
+        $result.ValidateRangeCount | Should -Be 1
     }
 
     It "duplicate [ReadOnly] attributes are idempotent" {
-        $name = "issue8906_duplicate_readonly"
+        $result = & {
+            [ReadOnly()][ReadOnly()]$value = 51
+            $variable = Get-Variable -Name value
 
-        try {
-            & ([ScriptBlock]::Create("[ReadOnly()][ReadOnly()]`$script:$name = 51"))
+            [pscustomobject]@{
+                Value = $variable.Value
+                Options = $variable.Options
+            }
+        }
 
-            $variable = Get-Variable -Name $name
-            $variable.Value | Should -Be 51
-            $variable.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
-        }
-        finally {
-            Remove-Variable -Name $name -Force -ErrorAction SilentlyContinue
-        }
+        $result.Value | Should -Be 51
+        $result.Options | Should -Be ([System.Management.Automation.ScopedItemOptions]::ReadOnly)
     }
 
     It "[ReadOnly] and [PSConstant] combine like ScopedItemOptions flags" {
