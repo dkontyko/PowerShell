@@ -8645,6 +8645,11 @@ namespace System.Management.Automation.Language
                 }
             }
 
+            if (result == null && _name.Equals("ReadOnly", StringComparison.OrdinalIgnoreCase))
+            {
+                result = typeof(PSReadOnlyAttribute);
+            }
+
             return result;
         }
 

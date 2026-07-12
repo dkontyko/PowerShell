@@ -63,6 +63,43 @@ namespace System.Management.Automation.Internal
 
 namespace System.Management.Automation
 {
+    internal interface IVariableOptionAttribute
+    {
+        ScopedItemOptions Option { get; }
+    }
+
+    /// <summary>
+    /// Marks a variable as constant when the variable is created.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
+    public sealed class PSConstantAttribute : Attribute, IVariableOptionAttribute
+    {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PSConstantAttribute"/> class.
+        /// </summary>
+        public PSConstantAttribute()
+        {
+        }
+
+        ScopedItemOptions IVariableOptionAttribute.Option => ScopedItemOptions.Constant;
+    }
+
+    /// <summary>
+    /// Marks a variable as read-only.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true)]
+    public sealed class PSReadOnlyAttribute : Attribute, IVariableOptionAttribute
+    {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PSReadOnlyAttribute"/> class.
+        /// </summary>
+        public PSReadOnlyAttribute()
+        {
+        }
+
+        ScopedItemOptions IVariableOptionAttribute.Option => ScopedItemOptions.ReadOnly;
+    }
+
     #region Base Metadata Classes
 
     /// <summary>

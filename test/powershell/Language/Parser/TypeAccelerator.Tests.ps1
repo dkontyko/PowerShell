@@ -163,6 +163,10 @@ Describe "Type accelerators" -Tags "CI" {
                     Type        = [System.Net.NetworkInformation.PhysicalAddress]
                 }
                 @{
+                    Accelerator = 'PSConstant'
+                    Type        = [System.Management.Automation.PSConstantAttribute]
+                }
+                @{
                     Accelerator = 'pscredential'
                     Type        = [System.Management.Automation.PSCredential]
                 }
@@ -185,6 +189,10 @@ Describe "Type accelerators" -Tags "CI" {
                 @{
                     Accelerator = 'psprimitivedictionary'
                     Type        = [System.Management.Automation.PSPrimitiveDictionary]
+                }
+                @{
+                    Accelerator = 'PSReadOnly'
+                    Type        = [System.Management.Automation.PSReadOnlyAttribute]
                 }
                 @{
                     Accelerator = 'ref'
@@ -418,11 +426,11 @@ Describe "Type accelerators" -Tags "CI" {
 
             if ( !$IsWindows )
             {
-                $totalAccelerators = 102
+                $totalAccelerators = 104
             }
             else
             {
-                $totalAccelerators = 107
+                $totalAccelerators = 109
 
                 $extraFullPSAcceleratorTestCases = @(
                     @{
